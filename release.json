@@ -1,0 +1,8 @@
+{
+  "version": "1.0.0",
+  "dataset": "2026-10-30-oos-35x41",
+  "builtAt": "2026-10-30T11:00:26.401Z",
+  "scenarios": 35,
+  "utterances": 41,
+  "parts": 46
+}
