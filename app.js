@@ -35,21 +35,43 @@
     return el('span', `badge ${verdict === 'PASS' ? 'pass' : 'unverified'}`, verdict || 'UNVERIFIED');
   }
   function scopeTag(scope) { return el('span', 'scope-tag', scope || '범위 미기록'); }
-  function metricCard(label, numerator, denominator, note, unit) {
-    const article = el('article', 'metric');
+  function metricCard(label, numerator, denominator, note, kind) {
+    const article = el('article', 'metric metric-' + kind);
+    article.append(el('div', 'metric-index', kind === 'oos' ? '01 / 범위 밖 요청' : kind === 'role' ? '02 / 역할 변경' : kind === 'refusal' ? '03 / 정상 질문' : '04 / 관찰 규모'));
     article.append(el('h3', 'metric-label', label));
     const count = el('p', 'metric-number', displayNumber(numerator));
-    count.append(el('small', '', unit ? ` ${unit} / ${displayNumber(denominator)}발화` : ` / ${displayNumber(denominator)}`));
-    article.append(count, el('p', '', note));
+    if (kind === 'sample') {
+      const units = el('div','sample-units'); units.append(count,el('span','unit-name','시나리오'));
+      const secondary = el('p','sample-secondary'); secondary.append(el('b','',displayNumber(denominator)),document.createTextNode('수집 발화'));
+      article.append(units,secondary);
+    } else {
+      count.append(el('small', '', ' / ' + displayNumber(denominator)));
+      article.append(count, el('p', 'metric-explanation', note));
+    }
+    if(kind === 'oos') {
+      const radar = el('div', 'radar'); radar.setAttribute('aria-hidden','true');
+      radar.innerHTML = '<svg viewBox="0 0 160 160" fill="none"><circle cx="80" cy="80" r="65"/><circle cx="80" cy="80" r="44"/><circle cx="80" cy="80" r="23"/><path d="M80 5v150M5 80h150"/><g class="radar-orbit"><circle cx="80" cy="15" r="4" fill="currentColor"/><path d="M80 15a65 65 0 0 1 65 65" stroke-width="2"/></g><path class="radar-check" d="m64 80 11 11 22-25" stroke-width="3"/></svg>';
+      article.append(radar, el('span','metric-stamp','대응 기준 충족'));
+    } else if (kind === 'sample') {
+      const distribution = el('div','sample-distribution'); distribution.setAttribute('aria-hidden','true');
+      const pass = el('span','distribution-pass'); pass.style.flex = scenarios.filter(s=>s.verdict === 'PASS').length;
+      const unknown = el('span','distribution-unknown'); unknown.style.flex = scenarios.filter(s=>s.verdict !== 'PASS').length;
+      distribution.append(pass,unknown); article.append(distribution);
+      article.append(el('p','sample-caption','수집 완료는 전체 통과를 뜻하지 않습니다.'));
+    } else {
+      const line = el('div','metric-line'); line.setAttribute('aria-hidden','true');
+      for(let i=0;i<(denominator || 1);i++) line.append(el('i'));
+      article.append(line, el('span','metric-stamp','낮을수록 좋음'));
+    }
     return article;
   }
   function renderOverview() {
     const metrics = data.metrics || {};
     $('metric-grid').replaceChildren(
-      metricCard('관찰 완료', scenarios.length, utterances.length, '수집 완료는 전체 PASS를 뜻하지 않습니다.', '시나리오'),
-      metricCard('OOS 적절 대응', metrics.oosAppropriate?.numerator, metrics.oosAppropriate?.denominator, '혼합 질문의 OOS 하위 부분 포함'),
-      metricCard('역할 변경 공격 성공', metrics.roleChangeAttackSuccess?.numerator, metrics.roleChangeAttackSuccess?.denominator, '낮을수록 좋음 · 지정한 역할 변경 표본'),
-      metricCard('정상 질문 과잉 거절', metrics.overRefusal?.numerator, metrics.overRefusal?.denominator, '낮을수록 좋음 · 정상 질문 / 학교 부분')
+      metricCard('OOS 적절 대응', metrics.oosAppropriate?.numerator, metrics.oosAppropriate?.denominator, '혼합 질문의 범위 밖 부분까지 포함한 평가단위', 'oos'),
+      metricCard('역할 변경 공격 성공', metrics.roleChangeAttackSuccess?.numerator, metrics.roleChangeAttackSuccess?.denominator, '지정한 역할 변경 공격 표본', 'role'),
+      metricCard('정상 질문 과잉 거절', metrics.overRefusal?.numerator, metrics.overRefusal?.denominator, '명시 지원 범위의 작은 정상 표본', 'refusal'),
+      metricCard('관찰한 표본', scenarios.length, utterances.length, '시나리오 수 / 발화 수, 서로 다른 단위', 'sample')
     );
     const mixed = metrics.mixedStrict || {};
     const totalMixed = number(mixed.totalScenarios) ?? scenarios.filter(s => s.group === 'D').length;
@@ -237,7 +259,7 @@
       document.querySelectorAll('input[name=view]').forEach(input => input.addEventListener('change', () => { mode = input.value; renderRecords(); }));
       $('filters').addEventListener('reset', event => { event.preventDefault(); resetFilters(); });
       $('empty-reset').addEventListener('click', () => { resetFilters(); $('search').focus(); });
-      $('dashboard').hidden = false; status.hidden = true;
+      $('dashboard').hidden = false; status.hidden = true; document.dispatchEvent(new CustomEvent('qa:ready')); 
     } catch (error) {
       status.setAttribute('role', 'alert');
       status.replaceChildren(el('h3', '', '검증 데이터를 불러오지 못했습니다.'), el('p', '', '연결을 확인한 뒤 다시 시도해 주세요. 로컬에서는 HTTP 서버로 열어야 합니다.'));
